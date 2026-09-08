@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parcel Profile | Fulton County GeoLibrary</title>
+
+<link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#12201c; --ink-soft:#4a5a54;
+    --rule:#c9d2ce; --rule-soft:#e4e9e7;
+    --paper:#fff; --shell:#eef1ef;
+    --survey:#0f5c8c; --survey-tint:#e2eef6;
+    --field:#8a6a1f; --field-tint:#f6efdd;
+    --sheet-w:8.5in;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--shell);color:var(--ink);
+    font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.45;
+    font-variant-numeric:tabular-nums;}
+
+  .finder{background:var(--ink);color:#f2f5f4;padding:22px 24px 24px;}
+  .finder-inner{max-width:var(--sheet-w);margin:0 auto;}
+  .finder h1{margin:0 0 2px;font-size:17px;font-weight:600;}
+  .finder p{margin:0 0 16px;font-size:13.5px;color:#a9b8b2;max-width:58ch;}
+  #searchDiv{max-width:520px;}
+  .finder-row{display:flex;gap:8px;flex-wrap:wrap;max-width:560px;}
+  .finder-row input{flex:1 1 300px;min-width:0;font:inherit;font-size:15px;
+    padding:11px 13px;border:1px solid #35473f;background:#0b1613;color:#f2f5f4;border-radius:3px;}
+  .finder-row input::placeholder{color:#6d807a;}
+  .finder-row button{font:inherit;font-weight:600;font-size:15px;padding:11px 20px;
+    border:0;border-radius:3px;background:#f2f5f4;color:var(--ink);cursor:pointer;}
+  .finder-row input:focus-visible,.finder-row button:focus-visible{
+    outline:2px solid #7fc4e8;outline-offset:2px;}
+  .status{margin-top:10px;font-size:13.5px;color:#a9b8b2;min-height:19px;}
+  .status.err{color:#f2b8b8;}
+
+  .toolbar{max-width:var(--sheet-w);margin:0 auto;padding:14px 0 0;display:flex;justify-content:flex-end;}
+  .toolbar button{font:inherit;font-size:13.5px;font-weight:600;padding:8px 15px;
+    border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:3px;cursor:pointer;}
+  .toolbar button:hover{border-color:var(--survey);color:var(--survey);}
+  .toolbar button:focus-visible{outline:2px solid var(--survey);outline-offset:2px;}
+
+  .sheet{max-width:var(--sheet-w);margin:14px auto 60px;background:var(--paper);
+    border:1px solid var(--rule);padding:0.5in;}
+  .sheet[hidden]{display:none;}
+
+  .masthead{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+    border-bottom:2px solid var(--ink);padding-bottom:7px;}
+  .masthead .office{font-size:13px;font-weight:600;color:var(--ink-soft);
+    display:flex;align-items:center;gap:10px;}
+  .masthead .logo{height:34px;width:auto;display:block;}
+  .masthead .stamp{font-size:11.5px;color:var(--ink-soft);}
+
+  .headline{margin:16px 0 4px;}
+  .headline .pid{font-size:30px;font-weight:700;letter-spacing:-0.02em;line-height:1.05;}
+  .headline .addr{font-size:17px;font-weight:500;color:var(--ink-soft);margin-top:3px;}
+  .headline .place{font-size:13.5px;color:var(--ink-soft);margin-top:6px;}
+
+  .frames{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0 4px;}
+  .frame{border:1px solid var(--rule);position:relative;background:#f7f9f8;}
+  .mapview{height:250px;width:100%;}
+  .frame figcaption{position:absolute;left:0;bottom:0;z-index:5;
+    background:rgba(255,255,255,.92);border-top:1px solid var(--rule);border-right:1px solid var(--rule);
+    font-size:11.5px;font-weight:600;color:var(--ink-soft);padding:3px 9px;}
+
+  .band{margin-top:22px;}
+  .band > h2{margin:0 0 9px;font-size:13.5px;font-weight:700;
+    border-bottom:1px solid var(--rule);padding-bottom:5px;}
+
+  .facts{display:grid;grid-template-columns:repeat(3,1fr);gap:0 22px;}
+  .fact{padding:8px 0;border-bottom:1px solid var(--rule-soft);}
+  .fact dt{font-size:12px;font-weight:500;color:var(--ink-soft);margin:0 0 1px;}
+  .fact dd{margin:0;font-size:15.5px;font-weight:600;letter-spacing:-0.01em;}
+  .fact dd small{display:block;font-size:12px;font-weight:400;color:var(--ink-soft);letter-spacing:0;}
+
+  .site{margin-top:22px;background:var(--field-tint);border-left:3px solid var(--field);padding:13px 16px 15px;}
+  .site[hidden]{display:none;}
+  .site h2{margin:0 0 9px;font-size:13.5px;font-weight:700;color:#6b5117;}
+  .site-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 24px;}
+  .site-item{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;
+    border-bottom:1px solid #e6dcc2;padding-bottom:5px;}
+  .site-item span:first-child{color:#6b5117;}
+  .site-item span:last-child{font-weight:600;text-align:right;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-size:12px;font-weight:600;color:var(--ink-soft);
+    padding:0 8px 5px 0;border-bottom:1px solid var(--rule);}
+  th:last-child,td:last-child{text-align:right;padding-right:0;}
+  td{padding:7px 8px 7px 0;border-bottom:1px solid var(--rule-soft);}
+  tr.subject td{background:var(--survey-tint);font-weight:600;}
+  tr.subject td:first-child{box-shadow:inset 3px 0 0 var(--survey);padding-left:8px;}
+
+  .scope{margin:-2px 0 9px;font-size:11.5px;color:var(--ink-soft);}
+  .footnote{margin-top:20px;padding-top:9px;border-top:1px solid var(--rule);
+    font-size:11px;line-height:1.5;color:var(--ink-soft);}
+  .footnote strong{color:var(--ink);font-weight:600;}
+
+  .notice{max-width:var(--sheet-w);margin:14px auto 0;background:#fff;
+    border:1px solid var(--rule);border-left:3px solid var(--survey);
+    font-size:14px;padding:13px 16px;}
+  .notice[hidden]{display:none;}
+  .notice h2{margin:0 0 5px;font-size:14px;font-weight:700;}
+  .notice p{margin:0;color:var(--ink-soft);font-size:13.5px;}
+  .notice ul{margin:8px 0 0;padding-left:18px;}
+  .notice li{margin-bottom:4px;}
+  .notice a{color:var(--survey);}
+
+  @media (max-width:720px){
+    .frames{grid-template-columns:1fr;}
+    .facts{grid-template-columns:repeat(2,1fr);}
+    .site-grid{grid-template-columns:1fr;}
+    .sheet{padding:22px 18px;margin:12px 10px 40px;}
+    .headline .pid{font-size:25px;}
+    .mapview{height:210px;}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+
+  @page{size:letter portrait;margin:0.45in;}
+  @media print{
+    body{background:#fff;font-size:10.5pt;}
+    .finder,.toolbar,.notice{display:none!important;}
+    .sheet{max-width:none;margin:0;border:0;padding:0;}
+    .headline .pid{font-size:22pt;}
+    .mapview{height:2.1in;}
+    .esri-view .esri-ui{display:none!important;}
+    .band{margin-top:14px;}
+    .site{margin-top:14px;background:var(--field-tint)!important;
+      -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    tr.subject td{background:var(--survey-tint)!important;
+      -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .frame,.band,.site,table{break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<header class="finder">
+  <div class="finder-inner">
+    <h1>Parcel profile</h1>
+    <p>Look up any parcel in Fulton County. Print or save the result as a one-page sheet.</p>
+    <div class="finder-row">
+      <input id="q" type="text" placeholder="Parcel number, or street number and name" autocomplete="off" aria-label="Parcel number or address">
+      <button type="button" id="go">Find parcel</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+</header>
+
+<div class="notice" id="notice" hidden>
+  <h2 id="noticeTitle"></h2>
+  <p id="noticeBody"></p>
+  <ul id="noticeList"></ul>
+</div>
+
+<div class="toolbar">
+  <button type="button" onclick="window.print()">Print this sheet</button>
+</div>
+
+<main class="sheet" id="sheet" hidden>
+  <div class="masthead">
+    <div class="office">
+      <img class="logo" alt="Fulton County, Ohio" src="data:image/png;base64,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">
+      <span>Fulton County Auditor &middot; GeoLibrary</span>
+    </div>
+    <div class="stamp" id="stamp"></div>
+  </div>
+
+  <div class="headline">
+    <div class="pid" id="pid"></div>
+    <div class="addr" id="addr"></div>
+    <div class="place" id="place"></div>
+  </div>
+
+  <div class="frames">
+    <figure class="frame">
+      <div class="mapview" id="parcelMap"></div>
+      <figcaption>Parcel boundaries</figcaption>
+    </figure>
+    <figure class="frame">
+      <div class="mapview" id="aerialMap"></div>
+      <figcaption id="aerialCaption">Aerial</figcaption>
+    </figure>
+  </div>
+
+  <section class="band">
+    <h2>Ownership and valuation</h2>
+    <dl class="facts" id="facts"></dl>
+  </section>
+
+  <section class="site" id="site" hidden>
+    <h2>Site notes</h2>
+    <div class="site-grid" id="siteGrid"></div>
+  </section>
+
+  <section class="band" id="salesBand">
+    <h2>Recent sales nearby</h2>
+    <p class="scope" id="salesScope"></p>
+    <table>
+      <thead>
+        <tr><th>Parcel</th><th>Location</th><th>Acres</th><th>Away</th><th>Sold</th><th>Price</th></tr>
+      </thead>
+      <tbody id="sales"></tbody>
+    </table>
+  </section>
+
+  <p class="footnote">
+    <strong>About this sheet.</strong> Ownership, valuation and acreage come from the Auditor's CAMA
+    records joined to the county parcel layer. Sales shown are the nearest recent transfers and are
+    not an appraisal. Zoning is administered by the township or village, not the county, so confirm
+    any zoning question with them. Utility locations are approximate. Questions: Fulton County
+    Auditor, 152 S Fulton St, Wauseon OH 43567.
+  </p>
+</main>
+
+<script src="https://js.arcgis.com/4.29/"></script>
+<script>
+/* ============================================================
+   CONFIG — this is the only block you edit.
+   Everything below it reads from here.
+   ============================================================ */
+const CONFIG = {
+
+  // Layer index is 44 on this service, not 0. Every service in this org uses a
+  // non-zero index, so check /FeatureServer before assuming.
+  parcelLayerUrl: "https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/Ownership_CAMA/FeatureServer/44",
+
+  // No public imagery service published yet. null falls back to Esri satellite.
+  imageryUrl: null,
+  aerialCaption: "Aerial",
+
+  // The Esri World Geocoder is a premium service and pops a sign-in dialog.
+  // Left off. Parcel number search works without it. To add address search,
+  // use your own SiteAddressPoint layer or a county locator instead.
+  locatorUrl: null,
+
+  // Mapped against the real Ownership_CAMA schema.
+  fields: {
+    parcelId:    "PARCELID",
+    owner:       "OwnName",
+    township:    "TownshipNa",
+    cityTown:    "CityTownNa",
+    schoolDist:  "SchoolCorp",
+    taxDistrict: "TAX_DIST",
+    deedAcres:   "Acres",
+    camaAcres:   "macres",
+    landUse:     "ClassDescr",
+    landUseCode: "mClassific",
+    valTotal:    "MKT_Total_",
+    valLand:     "MKT_Land_V",
+    valImpr:     "MKT_Impr_V",
+    valPrior:    null,          // no prior-year value field on this layer
+    cauvValue:   "CAUV_Value",
+    saleDate:    "SaleDate",
+    salePrice:   "SaleAmount",
+    validSale:   "ValidSale",
+    conveyance:  "Conveyance",
+    homestead:   "Hmstd_Flag",
+    zoning:      "Zoning",
+    frontFoot:   "mfrontfoot",
+    retiredYear: "RetiredYea",
+    deleted:     "Par_Delete"
+  },
+
+  // Address is stored in pieces, not one field. These assemble in order.
+  addressParts: ["mlocStrNo", "mlocStrDir", "mlocStrNam", "mlocStrSuf", "mlocStrS_1"],
+
+  sales: {
+    maxRows: 5,
+    validOnly: true,      // uses ValidSale, better than a price floor
+    minPrice: 1000,
+
+    // Match on ClassGroup rather than the exact class code, so a 110 compares
+    // against other ag classes instead of cash grain only.
+    matchOn: "ClassGroup",
+
+    // Search window by the first digit of mClassific. Ag needs a wider net than
+    // a village lot. First match wins; "default" catches anything unlisted.
+    windows: [
+      { name:"Agricultural", codeStartsWith:"1", bufferFeet: 21120, yearsBack: 5 },  // 4 mi
+      { name:"Residential",  codeStartsWith:"5", bufferFeet:  5280, yearsBack: 3 },  // 1 mi
+      { name:"Commercial",   codeStartsWith:"4", bufferFeet: 10560, yearsBack: 5 },  // 2 mi
+      { name:"Industrial",   codeStartsWith:"3", bufferFeet: 15840, yearsBack: 5 },  // 3 mi
+      { name:"default",                          bufferFeet:  5280, yearsBack: 3 }
+    ],
+
+    // If the window returns nothing, widen once and try again.
+    fallback: { bufferFeet: 52800, yearsBack: 8 }   // 10 mi
+  },
+
+  // Indices confirmed where noted. Check the others at /FeatureServer before
+  // uncommenting, they will not be 0.
+  siteLayers: [
+    // nameField pulls the route name onto the row, e.g. "SR 109, 0.8 mi".
+    // CHECK the field name at .../State_and_Fed_Roads/FeatureServer/30 and set
+    // it here. Leave null and you just get the distance.
+    { label:"Nearest state or federal route", type:"distance", unit:"mi",
+      nameField: null,
+      url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/State_and_Fed_Roads/FeatureServer/30" },
+
+    // No interchange layer exists in the org, so the ramps are listed here as
+    // fixed points. COORDINATES ARE APPROXIMATE and need checking before this
+    // goes public: open each in Pro or Google Maps and correct the lat/lon.
+    { label:"Nearest Turnpike interchange", type:"points", unit:"mi",
+      points: [
+        { name:"Exit 25 (SR 108, Wauseon)", lat:41.5215, lon:-84.1370 },
+        { name:"Exit 34 (SR 109, Delta)",   lat:41.5240, lon:-83.9930 },
+        { name:"Exit 39 (SR 295, Swanton)", lat:41.5270, lon:-83.8930 }
+      ] }
+
+    // { label:"Rail", type:"distance", unit:"mi",
+    //   url:".../Railroad_Line/FeatureServer/INDEX" },
+    // { label:"Public water", type:"atFrontage", bufferFeet:200,
+    //   url:".../Fulton_Lucas_Waterlines/FeatureServer/INDEX" },
+    // { label:"Sanitary sewer", type:"atFrontage", bufferFeet:200,
+    //   url:".../Sewer_Lines/FeatureServer/INDEX" },
+    // { label:"Nearest hydrant", type:"distance", unit:"ft",
+    //   url:".../County_Hydrants/FeatureServer/INDEX" },
+    // { label:"Floodplain", type:"overlap",
+    //   yes:"Mapped floodplain on parcel", no:"None mapped",
+    //   url:".../FEMA_Flood/FeatureServer/INDEX" }
+  ],
+
+  siteNotesForCodes: [],
+
+  extentBufferFeet: 400
+};
+/* ===================== end config ===================== */
+
+
+require([
+  "esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer",
+  "esri/layers/TileLayer", "esri/Graphic",
+  "esri/rest/support/Query", "esri/geometry/geometryEngine",
+  "esri/geometry/projection", "esri/geometry/Point"
+], function(Map, MapView, FeatureLayer, TileLayer, Graphic, Query, geometryEngine, projection, Point){
+
+  projection.load();
+
+  const F = CONFIG.fields;
+  const parcelLayer = new FeatureLayer({ url: CONFIG.parcelLayerUrl, outFields: ["*"] });
+
+  const subjectSym = {
+    type: "simple-fill",
+    color: [226,238,246,0.55],
+    outline: { color: [15,92,140], width: 2.5 }
+  };
+  const subjectSymAerial = {
+    type: "simple-fill",
+    color: [0,0,0,0],
+    outline: { color: [255,210,74], width: 2.5 }
+  };
+
+  // --- parcel frame -------------------------------------------------
+  const parcelDisplay = new FeatureLayer({
+    url: CONFIG.parcelLayerUrl,
+    outFields: [],
+    renderer: {
+      type: "simple",
+      symbol: { type:"simple-fill", color:[255,255,255,0.35],
+                outline:{ color:[201,210,206], width:0.8 } }
+    }
+  });
+
+  const parcelView = new MapView({
+    container: "parcelMap",
+    map: new Map({ basemap: "gray-vector", layers: [parcelDisplay] }),
+    ui: { components: [] },
+    constraints: { snapToZoom: false }
+  });
+
+  // --- aerial frame -------------------------------------------------
+  const aerialMap = new Map({ basemap: CONFIG.imageryUrl ? null : "satellite" });
+  if (CONFIG.imageryUrl) {
+    aerialMap.add(new TileLayer({ url: CONFIG.imageryUrl }));
+  }
+  const aerialView = new MapView({
+    container: "aerialMap",
+    map: aerialMap,
+    ui: { components: [] },
+    constraints: { snapToZoom: false }
+  });
+  document.getElementById("aerialCaption").textContent = CONFIG.aerialCaption;
+
+  // --- search -------------------------------------------------------
+  const statusEl = document.getElementById("status");
+  function status(msg, isErr){
+    statusEl.textContent = msg || "";
+    statusEl.className = "status" + (isErr ? " err" : "");
+  }
+
+  function esc(s){ return String(s).replace(/'/g, "''"); }
+
+  function doSearch(){
+    const raw = document.getElementById("q").value.trim();
+    if (!raw) return;
+
+    hideNotice();
+    status("Searching");
+
+    const t = esc(raw).toUpperCase();
+    const clauses = ["UPPER(" + F.parcelId + ") LIKE '%" + t + "%'"];
+
+    // street number and name, e.g. "9421 County Road 14"
+    const m = raw.match(/^\s*(\d+)\s+(.*\S)\s*$/);
+    if (m) {
+      clauses.push("(" + "UPPER(mlocStrNo) = '" + esc(m[1]).toUpperCase() + "'" +
+                   " AND UPPER(mlocStrNam) LIKE '%" + esc(m[2]).toUpperCase() + "%')");
+    } else {
+      clauses.push("UPPER(mlocStrNam) LIKE '%" + t + "%'");
+    }
+
+    const q = new Query({
+      where: "(" + clauses.join(" OR ") + ")",
+      outFields: ["*"],
+      returnGeometry: true,
+      num: 25
+    });
+
+    parcelLayer.queryFeatures(q).then(function(res){
+      status("");
+      if (!res.features.length) {
+        showNotice("No parcel found",
+          "Nothing matched \u201c" + raw + "\u201d. Check the parcel number format, or contact the Auditor's office at 419-337-9200.");
+      } else if (res.features.length === 1) {
+        loadParcel(res.features[0]);
+      } else {
+        showChoices(res.features.slice(0, 15));
+      }
+    }).catch(function(err){
+      console.error(err);
+      status("Query failed: " + (err && (err.details && err.details.messages ?
+        err.details.messages.join(" ") : err.message) || "unknown error"), true);
+    });
+  }
+
+  document.getElementById("go").addEventListener("click", doSearch);
+  document.getElementById("q").addEventListener("keydown", function(e){
+    if (e.key === "Enter") doSearch();
+  });
+
+  // Confirm the service is reachable before the user tries anything.
+  parcelLayer.load().then(function(){
+    return parcelLayer.queryFeatureCount();
+  }).then(function(n){
+    status(n.toLocaleString() + " parcels ready");
+  }).catch(function(err){
+    console.error(err);
+    status("Could not reach the parcel layer. " +
+      (err && err.message ? err.message : "Check that the service is shared publicly."), true);
+  });
+
+  // --- lookups ------------------------------------------------------
+
+  function parcelAtPoint(point){
+    const q = new Query({
+      geometry: point,
+      spatialRelationship: "intersects",
+      outFields: ["*"],
+      returnGeometry: true
+    });
+    parcelLayer.queryFeatures(q).then(function(res){
+      if (!res.features.length) {
+        showNotice("No parcel found there",
+          "That address didn't fall inside a Fulton County parcel. Try the parcel number instead, or contact the Auditor's office at 419-337-9200.");
+      } else if (res.features.length === 1) {
+        loadParcel(res.features[0]);
+      } else {
+        showChoices(res.features);
+      }
+    }).catch(queryFailed);
+  }
+
+  function showChoices(features){
+    const list = document.getElementById("noticeList");
+    list.innerHTML = features.map(function(f,i){
+      return '<li><a href="#" data-i="'+i+'">' +
+             (f.attributes[F.parcelId] || "Parcel") + " &mdash; " +
+             (address(f.attributes) || "no address on file") +
+             "</a></li>";
+    }).join("");
+    showNotice("More than one parcel matches", "Pick the one you want:");
+    list.onclick = function(e){
+      const a = e.target.closest("a");
+      if (!a) return;
+      e.preventDefault();
+      loadParcel(features[+a.dataset.i]);
+    };
+  }
+
+  function loadParcel(feature){
+    hideNotice();
+    const a = feature.attributes;
+    const geom = feature.geometry;
+
+    document.getElementById("sheet").hidden = false;
+    document.getElementById("pid").textContent = val(a, F.parcelId) || "Parcel";
+    document.getElementById("addr").textContent = address(a) || "No address on file";
+    document.getElementById("place").textContent =
+      [val(a, F.cityTown), val(a, F.township), val(a, F.schoolDist)]
+        .filter(Boolean).join(" \u00b7 ");
+    document.getElementById("stamp").textContent =
+      "Generated " + new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"2-digit"});
+
+    renderFacts(a);
+    zoomFrames(geom);
+    loadSales(feature);
+    loadSiteNotes(feature);
+
+    document.getElementById("sheet").scrollIntoView({behavior:"smooth", block:"start"});
+  }
+
+  // --- rendering ----------------------------------------------------
+
+  function val(a, field){
+    if (!field) return null;
+    let v = a[field];
+    if (typeof v === "string") v = v.trim();
+    return (v === null || v === undefined || v === "") ? null : v;
+  }
+
+  // Address lives in five separate columns on this layer.
+  function address(a){
+    const parts = CONFIG.addressParts
+      .map(function(f){ return val(a, f); })
+      .filter(Boolean)
+      .map(String)
+      .map(function(s){ return s.trim(); })
+      .filter(function(s){ return s.length; });
+    return parts.length ? parts.join(" ") : null;
+  }
+  function money(v){
+    return (v === null || v === undefined || isNaN(v)) ? null :
+      "$" + Number(v).toLocaleString("en-US",{maximumFractionDigits:0});
+  }
+  function fmtDist(feet, unit){
+    if (unit === "mi") {
+      const mi = feet / 5280;
+      return (mi < 0.1 ? mi.toFixed(2) : mi.toFixed(1)) + " mi";
+    }
+    return Math.round(feet).toLocaleString("en-US") + " ft";
+  }
+  function acres(v){
+    return (v === null || v === undefined || isNaN(v)) ? null : Number(v).toFixed(2) + " ac";
+  }
+  function when(v){
+    if (!v) return null;
+    const d = new Date(v);
+    return isNaN(d) ? String(v) : d.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"2-digit"});
+  }
+
+  function renderFacts(a){
+    const rows = [];
+    const push = function(label, main, sub){ if (main) rows.push([label, main, sub || ""]); };
+
+    push("Owner", val(a, F.owner));
+    push("Deed acreage", acres(val(a, F.deedAcres)),
+         val(a, F.camaAcres) ? "CAMA acreage " + Number(a[F.camaAcres]).toFixed(2) : "");
+    push("Land use", val(a, F.landUse),
+         val(a, F.landUseCode) ? "Class " + a[F.landUseCode] : "");
+    push("Taxing district", val(a, F.taxDistrict) ? String(a[F.taxDistrict]) : null);
+    push("Zoning", val(a, F.zoning), "Confirm with township or village");
+
+    const total = val(a, F.valTotal);
+    push("Market value", money(total),
+         [money(val(a,F.valLand)) ? "Land " + money(a[F.valLand]) : null,
+          money(val(a,F.valImpr)) ? "Impr " + money(a[F.valImpr]) : null]
+         .filter(Boolean).join(" / "));
+
+    const prior = val(a, F.valPrior);
+    if (prior) {
+      let change = "";
+      if (total && Number(prior) > 0) {
+        const pct = ((Number(total) - Number(prior)) / Number(prior)) * 100;
+        change = (pct >= 0 ? "Up " : "Down ") + Math.abs(pct).toFixed(1) + "%";
+      }
+      push("Prior value", money(prior), change);
+    }
+
+    // CAUV is a value column, not a yes/no flag.
+    const cauv = val(a, F.cauvValue);
+    if (cauv !== null) {
+      push("CAUV", Number(cauv) > 0 ? "Enrolled" : "Not enrolled",
+           Number(cauv) > 0 ? "CAUV value " + money(cauv) : "");
+    }
+
+    const sd = when(val(a, F.saleDate));
+    const validFlag = val(a, F.validSale);
+    push("Last transfer", sd || "No recorded sale",
+         [money(val(a, F.salePrice)),
+          (validFlag !== null && Number(validFlag) !== 1) ? "Not an arm's length sale" : null]
+         .filter(Boolean).join(" \u00b7 "));
+
+    const hs = val(a, F.homestead);
+    if (hs !== null) push("Homestead", /^[YT1]/i.test(String(hs)) ? "Yes" : "No");
+
+    push("Road frontage", val(a, F.frontFoot) ? Math.round(a[F.frontFoot]) + " ft" : null);
+
+    document.getElementById("facts").innerHTML = rows.map(function(r){
+      return '<div class="fact"><dt>' + r[0] + '</dt><dd>' + r[1] +
+             (r[2] ? '<small>' + r[2] + '</small>' : '') + '</dd></div>';
+    }).join("");
+  }
+
+  function zoomFrames(geom){
+    // Buffer in the parcel's own SR, which is in feet, then project the result
+    // into each view's SR. Without the projection step goTo silently fails and
+    // the view stays at world extent.
+    const padded = geometryEngine.buffer(geom, CONFIG.extentBufferFeet, "feet") || geom;
+
+    parcelView.graphics.removeAll();
+    parcelView.graphics.add(new Graphic({ geometry: geom, symbol: subjectSym }));
+
+    aerialView.graphics.removeAll();
+    aerialView.graphics.add(new Graphic({ geometry: geom, symbol: subjectSymAerial }));
+
+    projection.load().then(function(){
+      [parcelView, aerialView].forEach(function(view){
+        view.when(function(){
+          let target;
+          try {
+            target = projection.project(padded, view.spatialReference);
+          } catch (e) {
+            target = null;
+          }
+          if (!target) target = padded;
+          view.goTo(target.extent || target, { animate: false })
+              .catch(function(err){ console.warn("goTo failed", err); });
+        });
+      });
+    });
+  }
+
+  // --- nearby sales -------------------------------------------------
+
+  function loadSales(feature){
+    const a = feature.attributes;
+    const S = CONFIG.sales;
+    const band = document.getElementById("salesBand");
+
+    if (!F.saleDate || !F.salePrice) { band.hidden = true; return; }
+
+    // pick the window for this parcel's class band
+    const code = a[F.landUseCode] == null ? "" : String(a[F.landUseCode]);
+    const win = S.windows.filter(function(w){
+      return w.codeStartsWith && code.indexOf(w.codeStartsWith) === 0;
+    })[0] || S.windows.filter(function(w){ return w.name === "default"; })[0];
+
+    const center = feature.geometry.centroid || feature.geometry.extent.center;
+    const groupVal = S.matchOn ? val(a, S.matchOn) : null;
+
+    function buildWhere(yearsBack){
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - yearsBack);
+      const c = [
+        F.saleDate + " >= DATE '" + cutoff.toISOString().slice(0,10) + "'",
+        F.salePrice + " >= " + S.minPrice,
+        F.parcelId + " <> '" + esc(a[F.parcelId]) + "'"
+      ];
+      if (S.validOnly && F.validSale) c.push(F.validSale + " = 1");
+      // These are integer columns. Active parcels may carry 0 rather than NULL,
+      // so accept both or the clause silently excludes every record.
+      if (F.retiredYear) c.push("(" + F.retiredYear + " IS NULL OR " + F.retiredYear + " = 0)");
+      if (F.deleted) c.push("(" + F.deleted + " IS NULL OR " + F.deleted + " = 0)");
+      if (groupVal) c.push(S.matchOn + " = '" + esc(groupVal) + "'");
+      return c.join(" AND ");
+    }
+
+    function run(bufferFeet, yearsBack){
+      return parcelLayer.queryFeatures(new Query({
+        geometry: geometryEngine.buffer(feature.geometry, bufferFeet, "feet"),
+        spatialRelationship: "intersects",
+        where: buildWhere(yearsBack),
+        outFields: ["*"],
+        returnGeometry: true
+      }));
+    }
+
+    function draw(features, bufferFeet, yearsBack){
+      const near = features.map(function(f){
+        const c = f.geometry.centroid || f.geometry.extent.center;
+        return { f: f, d: geometryEngine.distance(center, c, "feet") };
+      }).sort(function(x,y){ return x.d - y.d; }).slice(0, S.maxRows);
+
+      document.getElementById("sales").innerHTML =
+        [subjectRow(a)].concat(near.map(function(n){
+          return saleRow(n.f.attributes, n.d);
+        })).join("");
+
+      const scope = document.getElementById("salesScope");
+      if (scope) {
+        scope.textContent = near.length
+          ? [groupVal || "all classes",
+             "within " + (bufferFeet/5280).toFixed(0) + " mi",
+             "last " + yearsBack + " years"].join(", ")
+          : "No qualifying sales found nearby";
+      }
+      band.hidden = false;
+    }
+
+    run(win.bufferFeet, win.yearsBack).then(function(res){
+      if (res.features.length) return draw(res.features, win.bufferFeet, win.yearsBack);
+      // nothing in the normal window, widen once
+      const fb = S.fallback;
+      return run(fb.bufferFeet, fb.yearsBack).then(function(res2){
+        draw(res2.features, fb.bufferFeet, fb.yearsBack);
+      });
+    }).catch(function(err){
+      console.error("sales query failed", err);
+      band.hidden = true;
+    });
+  }
+
+  function subjectRow(a){
+    return '<tr class="subject"><td>' + (val(a,F.parcelId)||"") + '</td><td>' +
+      (address(a)||"") + '</td><td>' + (val(a,F.deedAcres) ? Number(a[F.deedAcres]).toFixed(2) : "") +
+      '</td><td>subject</td><td>' + (when(val(a,F.saleDate))||"No recorded sale") + '</td><td>' +
+      (money(val(a,F.salePrice))||"") + '</td></tr>';
+  }
+  function saleRow(a, distFeet){
+    return '<tr><td>' + (val(a,F.parcelId)||"") + '</td><td>' + (address(a)||"") +
+      '</td><td>' + (val(a,F.deedAcres) ? Number(a[F.deedAcres]).toFixed(2) : "") +
+      '</td><td>' + (distFeet == null ? "" : fmtDist(distFeet, "mi")) +
+      '</td><td>' + (when(val(a,F.saleDate))||"") + '</td><td>' +
+      (money(val(a,F.salePrice))||"") + '</td></tr>';
+  }
+
+  // --- site notes ---------------------------------------------------
+
+  function loadSiteNotes(feature){
+    const block = document.getElementById("site");
+    const grid = document.getElementById("siteGrid");
+    const code = feature.attributes[F.landUseCode];
+
+    const gate = CONFIG.siteNotesForCodes;
+    if (!CONFIG.siteLayers.length ||
+        (gate.length && gate.indexOf(String(code)) === -1)) {
+      block.hidden = true;
+      return;
+    }
+
+    grid.innerHTML = "";
+    block.hidden = false;
+    const center = feature.geometry.centroid || feature.geometry.extent.center;
+
+    CONFIG.siteLayers.forEach(function(cfg){
+      const row = document.createElement("div");
+      row.className = "site-item";
+      row.innerHTML = "<span>" + cfg.label + "</span><span>checking</span>";
+      grid.appendChild(row);
+      const out = row.lastElementChild;
+
+      try {
+        siteRow(cfg, row, out, feature, center);
+      } catch (e) {
+        console.error("site note failed:", cfg.label, e);
+        row.remove();
+      }
+    });
+
+    // hide the whole block if every row dropped out
+    setTimeout(function(){
+      if (!grid.children.length) block.hidden = true;
+    }, 0);
+  }
+
+  function siteRow(cfg, row, out, feature, center){
+    {
+
+      const layer = cfg.url ? new FeatureLayer({ url: cfg.url }) : null;
+      // Only the frontage test needs a buffer, and only it should fail if the
+      // buffer cannot be built.
+      const buf = (cfg.type === "atFrontage")
+        ? geometryEngine.buffer(feature.geometry, cfg.bufferFeet || 200, "feet")
+        : null;
+
+      // Fixed points defined in config rather than a hosted layer.
+      if (cfg.type === "points") {
+        projection.load().then(function(){
+          let best = Infinity, bestName = null;
+          cfg.points.forEach(function(pt){
+            const wgs = new Point({ longitude: pt.lon, latitude: pt.lat });
+            let local;
+            try { local = projection.project(wgs, feature.geometry.spatialReference); }
+            catch (e) { local = null; }
+            if (!local) return;
+            const d = geometryEngine.distance(center, local, "feet");
+            if (d < best) { best = d; bestName = pt.name; }
+          });
+          if (best === Infinity) { row.remove(); return; }
+          out.textContent = [bestName, fmtDist(best, cfg.unit)]
+            .filter(Boolean).join(", ");
+        }).catch(function(){ row.remove(); });
+        return;
+      }
+
+      if (cfg.type === "atFrontage" || cfg.type === "overlap") {
+        layer.queryFeatureCount(new Query({
+          geometry: cfg.type === "overlap" ? feature.geometry : buf,
+          spatialRelationship: "intersects"
+        })).then(function(n){
+          out.textContent = n > 0
+            ? (cfg.yes || "At frontage")
+            : (cfg.no  || "Not at frontage");
+        }).catch(function(){ row.remove(); });
+
+      } else {
+        layer.queryFeatures(new Query({
+          geometry: geometryEngine.buffer(feature.geometry, 26400, "feet"),
+          spatialRelationship: "intersects",
+          returnGeometry: true,
+          outFields: cfg.nameField ? [cfg.nameField] : []
+        })).then(function(res){
+          if (!res.features.length) { out.textContent = "None within 5 mi"; return; }
+          let best = Infinity, bestName = null;
+          res.features.forEach(function(f){
+            const d = geometryEngine.distance(center, f.geometry, "feet");
+            if (d < best) {
+              best = d;
+              bestName = cfg.nameField ? val(f.attributes, cfg.nameField) : null;
+            }
+          });
+          out.textContent = [bestName, fmtDist(best, cfg.unit)]
+            .filter(Boolean).join(", ");
+        }).catch(function(){ row.remove(); });
+      }
+    }
+  }
+
+  // --- messages -----------------------------------------------------
+
+  function showNotice(title, body){
+    document.getElementById("noticeTitle").textContent = title;
+    document.getElementById("noticeBody").textContent = body || "";
+    document.getElementById("notice").hidden = false;
+    document.getElementById("sheet").hidden = true;
+  }
+  function hideNotice(){
+    document.getElementById("notice").hidden = true;
+    document.getElementById("noticeList").innerHTML = "";
+  }
+  function queryFailed(){
+    showNotice("Couldn't reach the parcel data",
+      "The lookup service didn't respond. Try again in a moment, or contact the Auditor's office at 419-337-9200.");
+  }
+});
+</script>
+</body>
+</html>
