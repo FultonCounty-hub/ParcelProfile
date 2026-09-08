@@ -42,6 +42,11 @@
   .toolbar button{font:inherit;font-size:13.5px;font-weight:600;padding:8px 15px;
     border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:3px;cursor:pointer;}
   .toolbar button:hover{border-color:var(--survey);color:var(--survey);}
+  #linkToggle{display:inline-flex;align-items:center;gap:7px;}
+  #linkToggle::before{content:"";width:8px;height:8px;border-radius:50%;
+    background:var(--survey);}
+  #linkToggle[aria-pressed="false"]{color:var(--ink-soft);}
+  #linkToggle[aria-pressed="false"]::before{background:var(--rule);}
   .toolbar button:focus-visible{outline:2px solid var(--survey);outline-offset:2px;}
 
   .sheet{max-width:var(--sheet-w);margin:14px auto 60px;background:var(--paper);
@@ -157,6 +162,7 @@
 </div>
 
 <div class="toolbar">
+  <button type="button" id="linkToggle" aria-pressed="true">Maps linked</button>
   <button type="button" onclick="window.print()">Print this sheet</button>
 </div>
 
@@ -222,6 +228,17 @@
    CONFIG — this is the only block you edit.
    Everything below it reads from here.
    ============================================================ */
+// Matches the Turnpike however it is spelled in the Road field.
+const TURNPIKE_SQL =
+  "UPPER(Road) LIKE '%TURNPIKE%' OR UPPER(Road) LIKE '%TPK%' " +
+  "OR UPPER(Road) LIKE '%I 80%' OR UPPER(Road) LIKE '%I-80%' OR UPPER(Road) LIKE '%I80%' " +
+  "OR UPPER(Road) LIKE '%I 90%' OR UPPER(Road) LIKE '%I-90%' OR UPPER(Road) LIKE '%I90%'";
+
+// Ramps and connectors, labelled only when zoomed well in.
+const RAMP_SQL =
+  "UPPER(Road) LIKE '%RAMP%' OR UPPER(Road) LIKE '%EXIT%' " +
+  "OR UPPER(Road) LIKE '%CONNECTOR%' OR UPPER(Road) LIKE '%INTERCHANGE%'";
+
 const CONFIG = {
 
   // Layer index is 44 on this service, not 0. Every service in this org uses a
@@ -297,8 +314,12 @@ const CONFIG = {
     // nameField pulls the route name onto the row, e.g. "SR 109, 0.8 mi".
     // CHECK the field name at .../State_and_Fed_Roads/FeatureServer/30 and set
     // it here. Leave null and you just get the distance.
+    // excludeName drops limited-access routes from this row. You cannot get on
+    // the Turnpike where it happens to pass a parcel, so reporting it as the
+    // nearest route is misleading. Turnpike access is the interchange row below.
     { label:"Nearest state or federal route", type:"distance", unit:"mi",
       nameField: "Road",
+      excludeName: /turnpike|ohio\s*tpk|(^|[^0-9a-z])i[\s\-]?(80|90)([^0-9]|$)/i,
       url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/State_and_Fed_Roads/FeatureServer/30" },
 
     // No interchange layer exists in the org, so the ramps are listed here as
@@ -322,6 +343,50 @@ const CONFIG = {
     // { label:"Floodplain", type:"overlap",
     //   yes:"Mapped floodplain on parcel", no:"None mapped",
     //   url:".../FEMA_Flood/FeatureServer/INDEX" }
+  ],
+
+  // Reference layers drawn under the parcel in both map frames.
+  // Give the bare /FeatureServer URL and the page resolves the layer index
+  // itself, so you do not have to look each one up.
+  referenceLayers: [
+    { name:"Township boundaries",
+      url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/Township_Boundaries/FeatureServer",
+      style:"boundary", color:[90,110,102], width:1.4, dash:"dash",
+      label:true, labelField:null, labelColor:[70,90,82], labelSize:8 },
+
+    { name:"Municipal boundaries",
+      url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/Incoporated_Areas/FeatureServer",
+      style:"boundary", color:[150,80,40], width:1.6, dash:"solid",
+      label:true, labelField:null, labelColor:[130,65,30], labelSize:8 },
+
+    { name:"Roads",
+      url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/Roads/FeatureServer",
+      style:"line", color:[110,120,115], width:0.9,
+      label:true, labelField:null, labelColor:[45,60,54], labelSize:8,
+      labelMaxScale: 0, labelMinScale: 80000 },
+
+    // Drawn last so it sits on top of the general road layer. Heavier line and
+    // labels at every scale, since these are the routes people orient by.
+    // Surface state and federal routes only. The Turnpike and its ramps are
+    // filtered out here and handled by the entry below.
+    { name:"State and federal routes",
+      url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/State_and_Fed_Roads/FeatureServer/30",
+      where: "NOT (" + TURNPIKE_SQL + ") AND NOT (" + RAMP_SQL + ")",
+      style:"line", color:[150,80,40], width:1.8,
+      label:true, labelField:"Road", labelColor:[120,58,22], labelSize:9,
+      labelMinScale: 0, labelMaxScale: 0,
+      deconfliction:"none", repeat:true, repeatDistance:340 },
+
+    // Turnpike mainline. Ramps are excluded, and every segment prints the same
+    // fixed string so deconfliction sees them as duplicates and keeps one.
+    { name:"Ohio Turnpike",
+      url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/State_and_Fed_Roads/FeatureServer/30",
+      where: "(" + TURNPIKE_SQL + ") AND NOT (" + RAMP_SQL + ")",
+      style:"line", color:[130,120,110], width:2.2,
+      label:true, labelText:"I-80/90 Ohio Turnpike",
+      labelColor:[95,88,80], labelSize:8,
+      labelMinScale: 0, labelMaxScale: 0,
+      deconfliction:"static", repeat:false }
   ],
 
   siteNotesForCodes: [],
@@ -367,10 +432,19 @@ require([
 
   const parcelView = new MapView({
     container: "parcelMap",
+    // No basemap. The grey vector tiles fought with the parcel lines, so the
+    // frame sits on the same cream as the site notes block instead.
     map: new Map({ basemap: "gray-vector", layers: [parcelDisplay] }),
     ui: { components: [] },
     constraints: { snapToZoom: false }
   });
+
+  // The grey canvas keeps its place names in a separate reference layer.
+  // Dropping it leaves the geometry and removes labels that compete with ours.
+  parcelView.when(function(){
+    const bm = parcelView.map.basemap;
+    return bm.load().then(function(){ bm.referenceLayers.removeAll(); });
+  }).catch(function(e){ console.warn("could not strip basemap labels", e); });
 
   // --- aerial frame -------------------------------------------------
   const aerialMap = new Map({ basemap: CONFIG.imageryUrl ? null : "satellite" });
@@ -750,6 +824,133 @@ require([
     return null;
   }
 
+  // Resolve a bare /FeatureServer URL to its first layer, so config does not
+  // need the index. Passes through URLs that already end in an index.
+  function resolveLayerUrl(url){
+    if (/\/\d+\/?$/.test(url)) return Promise.resolve(url.replace(/\/$/, ""));
+    const base = url.replace(/\/$/, "");
+    return fetch(base + "?f=json")
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        const first = (j.layers && j.layers[0]) || (j.tables && j.tables[0]);
+        if (!first) throw new Error("no layers on " + base);
+        return base + "/" + first.id;
+      });
+  }
+
+  function refSymbol(cfg){
+    if (cfg.style === "boundary") {
+      return { type:"simple-fill", color:[0,0,0,0],
+               outline:{ color:cfg.color, width:cfg.width || 1.2,
+                         style: cfg.dash === "dash" ? "dash" : "solid" } };
+    }
+    return { type:"simple-line", color:cfg.color, width:cfg.width || 1 };
+  }
+
+  // Build one FeatureLayer per view; a layer instance cannot be shared.
+  function buildRefLayer(cfg, url){
+    const lyr = new FeatureLayer({
+      url: url,
+      outFields: ["*"],
+      renderer: { type:"simple", symbol: refSymbol(cfg) },
+      legendEnabled: false,
+      popupEnabled: false,
+      definitionExpression: cfg.where || null,
+      // The service carries its own scale range, which suppresses labels when
+      // zoomed out even if the label class says otherwise. 0 means no limit.
+      minScale: cfg.minScale === undefined ? 0 : cfg.minScale,
+      maxScale: cfg.maxScale === undefined ? 0 : cfg.maxScale
+    });
+
+    if (cfg.label) {
+      lyr.when(function(){
+        const fld = cfg.labelField || pickNameField(lyr, LABEL_CANDIDATES);
+        if (!fld && !cfg.labelText) return;
+
+        // A fixed string makes every segment's label identical, which is what
+        // lets deconfliction collapse a many-segment route to a single label.
+        const expr = cfg.labelText
+          ? "'" + String(cfg.labelText).replace(/'/g, "\\'") + "'"
+          : "$feature." + fld;
+
+        function labelClass(o){
+          const c = {
+            labelExpressionInfo: { expression: expr },
+            symbol: {
+              type: "text",
+              color: o.color || cfg.labelColor || [60,70,66],
+              haloColor: [255,255,255],
+              haloSize: 1.1,
+              font: { size: o.size || cfg.labelSize || 8,
+                      family: "sans-serif", weight: "bold" }
+            },
+            labelPlacement: cfg.style === "line"
+              ? "center-along" : "always-horizontal",
+            minScale: o.minScale !== undefined ? o.minScale : (cfg.labelMinScale || 0),
+            maxScale: o.maxScale !== undefined ? o.maxScale : (cfg.labelMaxScale || 0),
+            deconflictionStrategy: o.deconfliction || cfg.deconfliction || "static",
+            repeatLabel: (o.repeat !== undefined ? o.repeat : cfg.repeat) === true,
+            repeatLabelDistance: o.repeatDistance || cfg.repeatDistance || 150
+          };
+          if (o.where) c.where = o.where;
+          return c;
+        }
+
+        lyr.labelingInfo = (cfg.labelClasses || [{}]).map(labelClass);
+        lyr.labelsVisible = true;
+        // re-assert after load; the service definition can put these back
+        lyr.minScale = cfg.minScale === undefined ? 0 : cfg.minScale;
+        lyr.maxScale = cfg.maxScale === undefined ? 0 : cfg.maxScale;
+      }).catch(function(e){ console.warn("label setup failed", cfg.name, e); });
+    }
+    return lyr;
+  }
+
+  const LABEL_CANDIDATES = ["Road","ROAD","NAME","Name","LABEL","FULLNAME",
+                            "STREET_NAM","ROADNAME","RD_NAME","TWPNAME",
+                            "TOWNSHIP","Township","MUNI","MUNI_NAME","CITY",
+                            "VILLAGE","CORP_NAME","NAMELSAD"];
+
+  // Add every reference layer to both frames, boundaries first so roads sit on top.
+  (CONFIG.referenceLayers || []).forEach(function(cfg){
+    resolveLayerUrl(cfg.url).then(function(url){
+      parcelView.map.add(buildRefLayer(cfg, url));
+      aerialView.map.add(buildRefLayer(cfg, url));
+    }).catch(function(e){
+      console.warn("reference layer skipped:", cfg.name, e.message);
+    });
+  });
+
+  // --- keep the two frames in step ----------------------------------
+  let mapsLinked = true;
+  let syncing = false;
+
+  function syncFrom(source, target){
+    return source.watch("center,zoom,rotation", function(){
+      if (!mapsLinked || syncing || !source.ready || !target.ready) return;
+      syncing = true;
+      target.viewpoint = source.viewpoint;
+      // release on the next frame so the mirrored change does not echo back
+      requestAnimationFrame(function(){ syncing = false; });
+    });
+  }
+
+  Promise.all([parcelView.when(), aerialView.when()]).then(function(){
+    syncFrom(parcelView, aerialView);
+    syncFrom(aerialView, parcelView);
+  });
+
+  const linkBtn = document.getElementById("linkToggle");
+  linkBtn.addEventListener("click", function(){
+    mapsLinked = !mapsLinked;
+    linkBtn.setAttribute("aria-pressed", String(mapsLinked));
+    linkBtn.textContent = mapsLinked ? "Maps linked" : "Maps unlinked";
+    // re-align the moment they are relinked
+    if (mapsLinked && parcelView.ready && aerialView.ready) {
+      aerialView.viewpoint = parcelView.viewpoint;
+    }
+  });
+
   function loadSiteNotes(feature){
     const block = document.getElementById("site");
     const grid = document.getElementById("siteGrid");
@@ -841,12 +1042,13 @@ require([
           if (!res.features.length) { out.textContent = "None within 5 mi"; return; }
           let best = Infinity, bestName = null;
           res.features.forEach(function(f){
+            const nm = nameField ? val(f.attributes, nameField) : null;
+            // skip limited-access routes; passing by is not access
+            if (cfg.excludeName && nm && cfg.excludeName.test(String(nm))) return;
             const d = geometryEngine.distance(center, f.geometry, "feet");
-            if (d < best) {
-              best = d;
-              bestName = nameField ? val(f.attributes, nameField) : null;
-            }
+            if (d < best) { best = d; bestName = nm; }
           });
+          if (best === Infinity) { out.textContent = "None within 5 mi"; return; }
           out.textContent = [bestName, fmtDist(best, cfg.unit)]
             .filter(Boolean).join(", ");
         }).catch(function(err){
