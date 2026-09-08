@@ -298,7 +298,7 @@ const CONFIG = {
     // CHECK the field name at .../State_and_Fed_Roads/FeatureServer/30 and set
     // it here. Leave null and you just get the distance.
     { label:"Nearest state or federal route", type:"distance", unit:"mi",
-      nameField: null,
+      nameField: "Road",
       url:"https://services.arcgis.com/0hnEVNXvIdqgRR0s/ArcGIS/rest/services/State_and_Fed_Roads/FeatureServer/30" },
 
     // No interchange layer exists in the org, so the ramps are listed here as
@@ -730,6 +730,26 @@ require([
 
   // --- site notes ---------------------------------------------------
 
+  // Find a route-name field without knowing the schema in advance.
+  const SKIP_FIELDS = /^(objectid|fid|globalid|shape|created|last_edit|edited|se_anno)/i;
+  function pickNameField(layer, candidates){
+    const fields = layer.fields || [];
+    const byName = {};
+    fields.forEach(function(f){ byName[f.name.toUpperCase()] = f; });
+
+    const wanted = candidates || [];
+    for (let i = 0; i < wanted.length; i++) {
+      const hit = byName[wanted[i].toUpperCase()];
+      if (hit) return hit.name;
+    }
+    // nothing matched, take the first reasonable text field
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      if (f.type === "esriFieldTypeString" && !SKIP_FIELDS.test(f.name)) return f.name;
+    }
+    return null;
+  }
+
   function loadSiteNotes(feature){
     const block = document.getElementById("site");
     const grid = document.getElementById("siteGrid");
@@ -808,24 +828,31 @@ require([
         }).catch(function(){ row.remove(); });
 
       } else {
-        layer.queryFeatures(new Query({
-          geometry: geometryEngine.buffer(feature.geometry, 26400, "feet"),
-          spatialRelationship: "intersects",
-          returnGeometry: true,
-          outFields: cfg.nameField ? [cfg.nameField] : []
-        })).then(function(res){
+        layer.load().then(function(){
+          const nameField = cfg.nameField || pickNameField(layer, cfg.nameFieldCandidates);
+          return layer.queryFeatures(new Query({
+            geometry: geometryEngine.buffer(feature.geometry, 26400, "feet"),
+            spatialRelationship: "intersects",
+            returnGeometry: true,
+            outFields: nameField ? [nameField] : []
+          })).then(function(res){ res._nameField = nameField; return res; });
+        }).then(function(res){
+          const nameField = res._nameField;
           if (!res.features.length) { out.textContent = "None within 5 mi"; return; }
           let best = Infinity, bestName = null;
           res.features.forEach(function(f){
             const d = geometryEngine.distance(center, f.geometry, "feet");
             if (d < best) {
               best = d;
-              bestName = cfg.nameField ? val(f.attributes, cfg.nameField) : null;
+              bestName = nameField ? val(f.attributes, nameField) : null;
             }
           });
           out.textContent = [bestName, fmtDist(best, cfg.unit)]
             .filter(Boolean).join(", ");
-        }).catch(function(){ row.remove(); });
+        }).catch(function(err){
+          console.error("[" + cfg.label + "] failed:", err);
+          row.remove();
+        });
       }
     }
   }
